@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Radius Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js">
+  </script>
+
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { height: 100vh; width: 100vw; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.9);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: sans-serif;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      z-index: 9999;
+    }
+    #searchInput {
+      width: 200px;
+      padding: 5px;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 10000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 20px 25px;
+      border-radius: 10px;
+      max-width: 400px;
+      text-align: center;
+      font-family: sans-serif;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+    button {
+      padding: 1em;
+    }
+  </style>
+  <script src="https://modestanalytics.com/embed.js" data-token="E9aeS_2DCskbR5yLyu17Sw"></script>
+</head>
+<body>
+
+<div id="controls">
+  <input type="text" id="searchInput" placeholder="Search city...">
+  <button onclick="searchCity()">Search</button>
+
+  <span>Blast Radius:</span>
+  <input type="range" id="radiusSlider" min="15" max="20" value="17.5" step="0.1" oninput="radiusChanged()">
+  <span id="radiusValue">17.5 km</span>
+</div>
+
+<div id="map"></div>
+
+<div id="introModal" class="modal">
+  <div class="modal-content">
+    <h2>Welcome!</h2>
+    <p>
+      This tool lets you visualize the blast radius from a modern nuclear bomb around any point on Earth.
+    </p>
+    <p>
+      You can click anywhere on the map or search for a city, and adjust the radius using the slider.
+    </p>
+    <button id="closeModal">Got it</button>
+  </div>
+</div>
+
+<script>
+  let map = L.map('map').setView([20, 0], 2);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18
+  }).addTo(map);
+
+  let currentCircle = null;
+  let currentMarker = null;
+  let currentRadius = 17500; // default
+
+  function radiusChanged() {
+    const km = document.getElementById("radiusSlider").value;
+    document.getElementById("radiusValue").innerText = km + " km";
+    currentRadius = km * 1000;
+
+    if (currentMarker) {
+      drawCircle(currentMarker.getLatLng());
+    }
+  }
+
+  function drawCircle(latlng) {
+    if (currentCircle) {
+      currentCircle.remove();
+    }
+    currentCircle = L.circle(latlng, {
+      radius: currentRadius,
+      color: "#666",
+      weight: 1,
+      fillColor: "#888",
+      fillOpacity: 0.25
+    }).addTo(map);
+  }
+
+  map.on('click', function(e) {
+    if (currentMarker) {
+      currentMarker.remove();
+    }
+    currentMarker = L.marker(e.latlng).addTo(map);
+    drawCircle(e.latlng);
+  });
+
+  async function searchCity() {
+    let query = document.getElementById("searchInput").value;
+
+    if (!query) return;
+
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`);
+    const data = await response.json();
+    if (data && data.length > 0) {
+      let lat = parseFloat(data[0].lat);
+      let lon = parseFloat(data[0].lon);
+
+      map.setView([lat, lon], 10);
+
+      if (currentMarker) currentMarker.remove();
+      currentMarker = L.marker([lat, lon]).addTo(map);
+
+      drawCircle([lat, lon]);
+    } else {
+      alert("Location not found");
+    }
+  }
+  document.getElementById("searchInput").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") {
+      searchCity();
+    }
+  });
+
+  // Intro modal
+  function showModal() {
+    document.getElementById("introModal").style.display = "flex";
+  }
+
+  function hideModal() {
+    document.getElementById("introModal").style.display = "none";
+  }
+
+  // When first time visit:
+  if (!localStorage.getItem("seenIntro")) {
+    showModal();
+    localStorage.setItem("seenIntro", "true");
+  }
+
+  // Close button
+  document.getElementById("closeModal").addEventListener("click", hideModal);
+</script>
+</body>
+</html>
